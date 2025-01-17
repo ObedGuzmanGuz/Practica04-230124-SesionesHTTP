@@ -1,0 +1,19 @@
+{
+  "name": "practica04-230124-sesioneshttp",
+  "version": "1.0.0",
+  "description": "Repositorio creado para el uso de sesiones de HTP, con uso de variables de sesión",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "moment-timezone": "^0.5.46",
+    "uuid": "^11.0.5"
+  }
+}
