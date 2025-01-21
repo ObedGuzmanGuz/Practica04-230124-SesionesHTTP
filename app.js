@@ -3,10 +3,22 @@ import session from 'express-session';
 import bodyParser from 'body-parser';
 import moment  from 'moment-timezone';
 import { v4 as uuidv4 } from 'uuid';
+import cors from 'cors'
 
 
  const app= express();
  const PORT = 3500;
+
+ const activeSessions = {}; //sirve para que se almacene las sesiones
+
+ app.use(cors({
+    origin: 'http://localhost:3000', // Cambia esto al dominio permitido
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Métodos permitidos
+    credentials: true, // Permite el uso de cookies y credenciales
+    }));
+
+
+
  app.use(express.json())
 
  app.use(express.urlencoded({extended:true}))
@@ -51,7 +63,7 @@ app.post("/login", (req,res)=> {
     const sessionID= uuidv4();
     const now = new Date();
     
-    session[sessionID]={
+    const sessionData={
         sessionID,
         email,
         nickname,
@@ -61,6 +73,9 @@ app.post("/login", (req,res)=> {
         lastAccessed: now,
 
     };
+
+    req.session[sessionID] = sessionData;
+    activeSessions[sessionID] = sessionData; //Guardar sesion en el almacenamiento de sesiones
 
     res.status(200).json({
     message:"Se ha logeado de manera exitosa",
@@ -86,7 +101,7 @@ if(!sessionID || !session[sessionID]){
 
 
 
-delete session[sessionID];
+delete activeSessions[sessionID];
 req.session.destroy((err) =>{
     if(err) {
         return res.status(500).send("Error al cerra la sesion");
@@ -103,17 +118,17 @@ res.status(200).json({message: "Logout successful"});
 // Actualizacion de la Sesion
 app.put("/update", (req,res)=>{
     const {sessionID, email, nickname }= req.body;
-    if(!sessionID || !session[sessionID]){
+    if(!sessionID || !activeSessions[sessionID]){
         return res.status(404).json({message:" No existe una sesion activa"});
     }
 
-    if(email) session[sessionID].email =email;
-    if(nickname) session[sessionID].nickname = nickname;
-    session[sessionID].lastAccess= new Date();
+    if(email) activeSessions[sessionID].email =email;
+    if(nickname) activeSessions[sessionID].nickname = nickname;
+    activeSessions[sessionID].lastAccess= new Date();
 
     res.status(200).json({
         message:"La sesion se ha actualizado",
-        sesion: session[sessionID]
+        sesion: activeSessions[sessionID]
     })
 
 });
@@ -122,14 +137,14 @@ app.put("/update", (req,res)=>{
 //Estatis de la Sesion
 app.get("/status",(req,res)=>{
     const sessionID= req.query.sessionID;
-    if(!sessionID || !session[sessionID]){
+    if(!sessionID || !activeSessions[sessionID]){
     return res.status(404).json({message:"No hay sesion activa."});
 
     }
 
     res.status(200).json({
         message:"Sesion Activa",
-        session: session[sessionID]
+        session: activeSessions[sessionID]
 
 
     })
@@ -137,7 +152,12 @@ app.get("/status",(req,res)=>{
 
 
 
-
+app.get('/sessions', (req, res) => {
+    res.status(200).json({
+        message: 'Sesiones activas',
+        sessions: Object.values(activeSessions), // Retornar todas las sesiones activas
+    });
+});
 
 
 
