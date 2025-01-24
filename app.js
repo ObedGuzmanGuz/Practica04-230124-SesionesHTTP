@@ -18,7 +18,9 @@ import os from 'os';
     credentials: true, // Permite el uso de cookies y credenciales
     }));
 
-
+//10.10.60.21 -Paco GG
+//10.10.60.24 -Charly
+//10.10.60.10 -Giovani
 
  app.use(express.json())
 
@@ -66,7 +68,9 @@ app.post("/login", (req,res)=> {
 
 
     const sessionID= uuidv4();
-    const now = new Date();
+    const now = moment().tz('America/Mexico_City'); 
+
+
     
     sessions[sessionID]={
         sessionID,
@@ -74,8 +78,8 @@ app.post("/login", (req,res)=> {
         nickname,
         macAddress,
         ip:getServerNetworkInfo(),
-        createAt: now,
-        lastAccessed: now,
+        createAt: now.format('YYYY-MM-DD HH:mm:ss'), 
+        lastAccessed: now.format('YYYY-MM-DD HH:mm:ss'), 
 
     };
 
@@ -131,7 +135,9 @@ app.post("/update", (req,res)=>{
 
     if(email) sessions[sessionID].email =email;
     if(nickname) sessions[sessionID].nickname = nickname;
-    sessions[sessionID].lastAccesed= new Date();
+   // sessions[sessionID].lastAccesed= new Date();
+
+   //tiempo de inactividad reiniciarse solo cuando se actualize
 
     res.status(200).json({
         message:"La sesion se ha actualizado",
@@ -144,29 +150,56 @@ console.log("SessionID proporcionado:", sessionID);
 
 
 //Estatis de la Sesion
-app.get("/status",(req,res)=>{
-    const sessionID= req.query.sessionID;
-    if(!sessionID || !sessions[sessionID]){
-    return res.status(404).json({message:"No hay sesion activa."});
-
+const tiemposeson = 2 * 60 * 1000; // 2 minutos en milisegundos
+app.get("/status", (req, res) => {
+    const sessionID = req.query.sessionID;
+    if (!sessionID || !sessions[sessionID]) {
+        return res.status(404).json({ message: "No hay sesión activa." });
     }
 
+    const session = sessions[sessionID];
+    const nowCDMX = moment().tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss');
+    const lastAccessed = moment(session.lastAccessed, 'YYYY-MM-DD HH:mm:ss');
+    const now = moment();
+
+    // Verificar si la sesión ha expirado
+    if (now.diff(lastAccessed) > tiemposeson) {
+        delete sessions[sessionID]; // Eliminar sesión vencida
+        return res.status(408).json({ message: "La sesión ha expirado por inactividad." });
+    }
+
+    // Si la sesión es válida, actualizar la última vez que se accedió
+    session.lastAccessed = now.format('YYYY-MM-DD HH:mm:ss');
+
     res.status(200).json({
-        message:"Sesion Activa",
-        session: sessions[sessionID]
+        message: "Sesión activa",
+        session: session,
+        horaActualCDMX: nowCDMX,
+        
 
+    });
+});
 
+app.get('/',(req,res)=>{
+    return res.status(200).json({
+        message:"Bienvenido a la API de Control de sesiones",
+        author:"Obed Guzman Flores"
     })
 })
 
 
-
 app.get('/sessions', (req, res) => {
+    if (Object.keys(sessions).length === 0) {
+        return res.status(404).json({
+            message: 'No hay sesiones activas.',
+        });
+    }
     res.status(200).json({
         message: 'Sesiones activas',
-        sessions: Object.values(sessions), // Retornar todas las sesiones activas
+        sessions: Object.values(sessions), 
     });
 });
+
 
 
 
