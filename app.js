@@ -46,15 +46,24 @@ import os from 'os';
 // Funcion de utilidad que nos permitira acceder a la informacion de la intefaz de red en este caso (LAN)
 
 const getClientIp = (req) => {
-    const ip=
-        req.headers['x-forwarded-for'] || 
-        req.connection.remoteAddress || 
-        req.socket.remoteAddress || 
-        req.connection.socket?.remoteAddress
-        
-    
-    
+    const ip = req.headers['x-forwarded-for'] || 
+              req.connection.remoteAddress || 
+              req.socket.remoteAddress || 
+              req.connection.socket?.remoteAddress;
+
+    return ip; // Asegúrate de retornar la IP.
 };
+
+const getServerNetworkInfo = () => {
+    const interfaces = os.networkInterfaces()
+    for(const name in interfaces){
+        for(const iface of interfaces[name]){
+            if(iface.family === 'IPv4' && !iface.internal ){
+                return{serverIP: iface.address, serverMac: iface.mac}
+            }
+        }
+    }
+}
 
 // Login endpoint
 
@@ -77,7 +86,7 @@ app.post("/login", (req,res)=> {
         email,
         nickname,
         macAddress,
-        ip:getServerNetworkInfo(),
+        ip:getClientIp(req),
         createAt: now.format('YYYY-MM-DD HH:mm:ss'), 
         lastAccessed: now.format('YYYY-MM-DD HH:mm:ss'), 
 
@@ -205,16 +214,6 @@ app.get('/sessions', (req, res) => {
 
 
 
-const getServerNetworkInfo = () => {
-    const interfaces = os.networkInterfaces()
-    for(const name in interfaces){
-        for(const iface of interfaces[name]){
-            if(iface.family === 'IPv4' && !iface.internal ){
-                return{serverIP: iface.address, serverMac: iface.mac}
-            }
-        }
-    }
-}
 
 app.listen(PORT, ()=>{
     console.log(`Servidor ejecutandose en http://localhost:${PORT}`);
