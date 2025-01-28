@@ -96,31 +96,32 @@ app.post("/login", (req,res)=> {
 
 
 // Logout endpoint
+app.post("/logout", (req, res) => {
+    const { sessionID } = req.body;
 
-app.post("/logout", (req,res)=>{
-    const {sessionID }= req.body;
-
-if(!sessionID || !sessions[sessionID]){
-    return res.status(404).json({
-        message: "No se ha encontrado una sesion activa."
-
-    });
-}
-
-
-
-
-delete sessions[sessionID];
-req.session.destroy((err) =>{
-    if(err) {
-        return res.status(500).send("Error al cerra la sesion");
+    // Verificar que se proporcione un sessionID válido
+    if (!sessionID || !sessions[sessionID]) {
+        return res.status(404).json({
+            message: "No se ha encontrado una sesión activa."
+        });
     }
 
+    // Eliminar la sesión del almacenamiento en memoria
+    delete sessions[sessionID];
 
-})
+    // Intentar destruir la sesión activa
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({
+                message: "Error al cerrar la sesión."
+            });
+        }
 
-res.status(200).json({message: "Logout successful"});
-
+        // Confirmar el cierre exitoso de la sesión
+        res.status(200).json({
+            message: "Sesión cerrada exitosamente."
+        });
+    });
 });
 
 
