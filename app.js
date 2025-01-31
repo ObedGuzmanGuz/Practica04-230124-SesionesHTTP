@@ -35,35 +35,51 @@ import os from 'os';
  app.use(
         session({
         secret:'p4-Obed#OBGF-sessiionesHTTP',
-        resave: false, //permite desabilitar los cambios 
-        saveUninitialized: false,  //si no esta inicializada que se inicialize
+        resave: false, 
+        saveUninitialized: false, 
         cookie: {maxAge: 5*60*100}
 
 
         })
  )
 
-// Funcion de utilidad que nos permitira acceder a la informacion de la intefaz de red en este caso (LAN)
+
 
 const getClientIp = (req) => {
-    const ip = req.headers['x-forwarded-for'] || 
-              req.connection.remoteAddress || 
-              req.socket.remoteAddress || 
-              req.connection.socket?.remoteAddress;
+    let ip = req.headers['x-forwarded-for'] || 
+             req.connection.remoteAddress || 
+             req.socket.remoteAddress || 
+             req.connection.socket?.remoteAddress;
 
-    return ip; // Asegúrate de retornar la IP.
+    if (ip && ip.includes('::ffff:')) {
+        ip = ip.split('::ffff:')[1]; 
+    }
+
+    return ip; 
 };
 
 const getServerNetworkInfo = () => {
-    const interfaces = os.networkInterfaces()
-    for(const name in interfaces){
-        for(const iface of interfaces[name]){
-            if(iface.family === 'IPv4' && !iface.internal ){
-                return{serverIP: iface.address, serverMac: iface.mac}
+    const interfaces = os.networkInterfaces();
+
+    for (const name in interfaces) {
+        for (const iface of interfaces[name]) {
+            // Verificamos si la interfaz es una interfaz de red IPv4 y no es interna
+            if (iface.family === 'IPv4' && !iface.internal) {
+                // Verificamos si la interfaz es de tipo 'inalámbrica'
+                if (name.toLowerCase().includes('wlan') || name.toLowerCase().includes('wifi')) {
+                    // Formatear la MAC address para que tenga guiones y en mayúsculas
+                    const formattedMac = iface.mac.toUpperCase().replace(/:/g, '-');
+                    return { serverIP: iface.address, serverMac: `Lan Inalambrica ${formattedMac}` };
+                }
             }
         }
     }
-}
+
+    // Si no se encuentra ninguna interfaz válida, retorna valores predeterminados
+    return { serverIP: "0.0.0.0", serverMac: "00-00-00-00-00-00" };
+};
+
+
 
 // Login endpoint
 
@@ -90,6 +106,7 @@ app.post("/login", (req,res)=> {
         ip_client: getClientIp(req),
         createAt: now.format('YYYY-MM-DD HH:mm:ss'), 
         lastAccessed: now.format('YYYY-MM-DD HH:mm:ss'), 
+        
 
     };
 
@@ -198,20 +215,35 @@ app.get('/',(req,res)=>{
     })
 })
 
-
 app.get('/sessions', (req, res) => {
     if (Object.keys(sessions).length === 0) {
         return res.status(404).json({
             message: 'No hay sesiones activas.',
         });
     }
+
+
+    const now = moment();
+    const sessionsWithTimeData = Object.values(sessions).map(session => {
+        const sessionStart = moment(session.createAt, 'YYYY-MM-DD HH:mm:ss');
+        const lastAccessed = moment(session.lastAccessed, 'YYYY-MM-DD HH:mm:ss');
+        
+        const tiempoSesionActivo = now.diff(sessionStart, 'seconds');
+        const tiempoInactividad = now.diff(lastAccessed, 'seconds');
+      
+        return {
+            ...session,
+            Duracion_sesion: `${tiempoSesionActivo} segundos`,
+            tiempoInactividad: `${tiempoInactividad} segundos`,
+        };
+    });
     
     res.status(200).json({
         message: 'Sesiones activas',
-        sessions: Object.values(sessions), 
-        
+        sessions: sessionsWithTimeData, 
     });
 });
+
 
 
 
