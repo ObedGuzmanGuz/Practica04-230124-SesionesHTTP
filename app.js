@@ -86,7 +86,8 @@ app.post("/login", (req,res)=> {
         email,
         nickname,
         macAddress,
-        ip:getClientIp(req),
+        ip:getServerNetworkInfo(),
+        ip_client: getClientIp(req),
         createAt: now.format('YYYY-MM-DD HH:mm:ss'), 
         lastAccessed: now.format('YYYY-MM-DD HH:mm:ss'), 
 
@@ -133,34 +134,32 @@ app.post("/logout", (req, res) => {
     });
 });
 
+// Actualización de la sesión
+app.post("/update", (req, res) => {
+    const { sessionID, email, nickname } = req.body;
 
-// Actualizacion de la Sesion
-app.post("/update", (req,res)=>{
-    
-
-    const {sessionID, email, nickname }= req.body;
-    if(!sessionID || !sessions[sessionID]){
-        return res.status(404).json({message:" No existe una sesion activa"});
+    if (!sessionID || !sessions[sessionID]) {
+        return res.status(404).json({ message: "No existe una sesión activa" });
     }
 
-    if(email) sessions[sessionID].email =email;
-    if(nickname) sessions[sessionID].nickname = nickname;
-   // sessions[sessionID].lastAccesed= new Date();
+    // Actualizar los datos de la sesión si se proporcionan
+    if (email) sessions[sessionID].email = email;
+    if (nickname) sessions[sessionID].nickname = nickname;
 
-   //tiempo de inactividad reiniciarse solo cuando se actualize
+    // Reiniciar el tiempo de inactividad al actualizar
+    sessions[sessionID].lastAccessed = moment().format('YYYY-MM-DD HH:mm:ss');
 
     res.status(200).json({
-        message:"La sesion se ha actualizado",
+        message: "La sesión se ha actualizado",
         sesion: sessions[sessionID]
-    })
-    console.log("Sesiones activas:", sessions);
-console.log("SessionID proporcionado:", sessionID);
+    });
 
+    console.log("Sesiones activas:", sessions);
+    console.log("SessionID proporcionado:", sessionID);
 });
 
-
-//Estatis de la Sesion
 const tiemposeson = 2 * 60 * 1000; // 2 minutos en milisegundos
+
 app.get("/status", (req, res) => {
     const sessionID = req.query.sessionID;
     if (!sessionID || !sessions[sessionID]) {
@@ -168,25 +167,27 @@ app.get("/status", (req, res) => {
     }
 
     const session = sessions[sessionID];
-    const nowCDMX = moment().tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss');
-    const lastAccessed = moment(session.lastAccessed, 'YYYY-MM-DD HH:mm:ss');
     const now = moment();
+    const nowCDMX = now.tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss');
+    const lastAccessed = moment(session.lastAccessed, 'YYYY-MM-DD HH:mm:ss');
+    const sessionStart = moment(session.createAt, 'YYYY-MM-DD HH:mm:ss');
+
+    // Calcular tiempos
+    const tiempoSesionActivo = now.diff(sessionStart, 'seconds'); 
+    const tiempoInactividad = now.diff(lastAccessed, 'seconds'); 
 
     // Verificar si la sesión ha expirado
-    if (now.diff(lastAccessed) > tiemposeson) {
+    if (tiempoInactividad > tiemposeson / 1000) {
         delete sessions[sessionID]; // Eliminar sesión vencida
         return res.status(408).json({ message: "La sesión ha expirado por inactividad." });
     }
-
-    // Si la sesión es válida, actualizar la última vez que se accedió
-    session.lastAccessed = now.format('YYYY-MM-DD HH:mm:ss');
 
     res.status(200).json({
         message: "Sesión activa",
         session: session,
         horaActualCDMX: nowCDMX,
-        
-
+        Duracion_sesion: `${tiempoSesionActivo} segundos`,
+        tiempoInactividad: `${tiempoInactividad} segundos`
     });
 });
 
@@ -204,9 +205,11 @@ app.get('/sessions', (req, res) => {
             message: 'No hay sesiones activas.',
         });
     }
+    
     res.status(200).json({
         message: 'Sesiones activas',
         sessions: Object.values(sessions), 
+        
     });
 });
 
