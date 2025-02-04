@@ -84,8 +84,9 @@ app.post("/login", (req,res)=> {
 
     const sessionID= uuidv4();
     const now = moment().tz('America/Mexico_City'); 
-
-
+    let ipclient= getClientIp(req)
+    ipclient = ipclient.replace('::ffff:','')
+    console.log(ipclient)
     
     sessions[sessionID]={
         sessionID,
@@ -93,7 +94,7 @@ app.post("/login", (req,res)=> {
         nickname,
         macAddress,
         ip:getServerNetworkInfo(),
-        ip_client: getClientIp(req),
+        ip_client: ipclient,
         createAt: now.format('YYYY-MM-DD HH:mm:ss'), 
         lastAccessed: now.format('YYYY-MM-DD HH:mm:ss'), 
         
