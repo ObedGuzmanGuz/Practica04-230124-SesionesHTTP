@@ -45,39 +45,29 @@ import os from 'os';
 
 
 
-const getClientIp = (req) => {
-    let ip = req.headers['x-forwarded-for'] || 
-             req.connection.remoteAddress || 
-             req.socket.remoteAddress || 
-             req.connection.socket?.remoteAddress;
+ const getClientIp = (req) => {
+    const ip =
+        req.headers["x-forwarded-for"] ||
+        req.connection.remoteAddress ||
+        req.socket.remoteAddress ||
+        req.connection.socket?.remoteAddress;
 
-    if (ip && ip.includes('::ffff:')) {
-        ip = ip.split('::ffff:')[1]; 
-    }
-
-    return ip; 
+    return ip === "::1" ? "127.0.0.1" : ip;
 };
 
 const getServerNetworkInfo = () => {
     const interfaces = os.networkInterfaces();
-
     for (const name in interfaces) {
         for (const iface of interfaces[name]) {
-            // Verificamos si la interfaz es una interfaz de red IPv4 y no es interna
             if (iface.family === 'IPv4' && !iface.internal) {
-                // Verificamos si la interfaz es de tipo 'inalámbrica'
-                if (name.toLowerCase().includes('wlan') || name.toLowerCase().includes('wifi')) {
-                    // Formatear la MAC address para que tenga guiones y en mayúsculas
-                    const formattedMac = iface.mac.toUpperCase().replace(/:/g, '-');
-                    return { serverIP: iface.address, serverMac: `Lan Inalambrica ${formattedMac}` };
-                }
+                return { serverIP: iface.address, serverMac: iface.mac };
             }
         }
     }
-
-    // Si no se encuentra ninguna interfaz válida, retorna valores predeterminados
-    return { serverIP: "0.0.0.0", serverMac: "00-00-00-00-00-00" };
+    return { serverIP: "0.0.0.0", serverMac: "00:00:00:00:00:00" };
 };
+
+
 
 
 
@@ -175,38 +165,63 @@ app.post("/update", (req, res) => {
     console.log("SessionID proporcionado:", sessionID);
 });
 
-const tiemposeson = 2 * 60 * 1000; // 2 minutos en milisegundos
+const tiemposeson = 2 * 60 * 1000; //
+const calcularTiempoSesion = (sessionID) => {
+    if (!sessions[sessionID]) {
+        return { error: "Sesión no encontrada." };
+    }
 
+    const now = moment();
+    const session = sessions[sessionID];
+    const lastAccessedAt = moment(session.lastAccessed, "YYYY-MM-DD HH:mm:ss");
+    const sessionStartAt = moment(session.createAt, "YYYY-MM-DD HH:mm:ss");
+    const tiempoSesionActivo = now.diff(sessionStartAt, "seconds");
+    const tiempoInactividad = now.diff(lastAccessedAt, "seconds");
+    const tiempoExpiracion = tiemposeson / 1000; 
+    const tiempoRestante = Math.max(0, tiempoExpiracion - tiempoInactividad);
+
+    
+    if (tiempoInactividad >= tiempoExpiracion) {
+        delete sessions[sessionID];
+        return { error: "La sesión ha expirado por inactividad." };
+    }
+
+    return {
+        Duracion_sesion: ` ${formatTime(tiempoSesionActivo)}`,
+        tiempoInactividad: ` ${formatTime(tiempoInactividad)}`,
+        tiempoRestante: ` ${formatTime(tiempoRestante)}`
+    };
+};
+
+
+const formatTime = (totalSeconds) => {
+    const minutos = Math.floor(totalSeconds / 60);
+    const segundos = totalSeconds % 60;
+    return `${minutos} minutos ${segundos} segundos`;
+};
+
+// Endpoint /status para verificar el estado de la sesión
 app.get("/status", (req, res) => {
     const sessionID = req.query.sessionID;
     if (!sessionID || !sessions[sessionID]) {
         return res.status(404).json({ message: "No hay sesión activa." });
     }
 
-    const session = sessions[sessionID];
-    const now = moment();
-    const nowCDMX = now.tz('America/Mexico_City').format('YYYY-MM-DD HH:mm:ss');
-    const lastAccessed = moment(session.lastAccessed, 'YYYY-MM-DD HH:mm:ss');
-    const sessionStart = moment(session.createAt, 'YYYY-MM-DD HH:mm:ss');
+    const resultado = calcularTiempoSesion(sessionID);
 
-    // Calcular tiempos
-    const tiempoSesionActivo = now.diff(sessionStart, 'seconds'); 
-    const tiempoInactividad = now.diff(lastAccessed, 'seconds'); 
-
-    // Verificar si la sesión ha expirado
-    if (tiempoInactividad > tiemposeson / 1000) {
-        delete sessions[sessionID]; // Eliminar sesión vencida
-        return res.status(408).json({ message: "La sesión ha expirado por inactividad." });
+    // Si la sesión expiró, devolver error y eliminarla
+    if (resultado.error) {
+        return res.status(408).json({ message: resultado.error });
     }
 
     res.status(200).json({
         message: "Sesión activa",
-        session: session,
-        horaActualCDMX: nowCDMX,
-        Duracion_sesion: `${tiempoSesionActivo} segundos`,
-        tiempoInactividad: `${tiempoInactividad} segundos`
+        session: sessions[sessionID],
+        horaActualCDMX: moment().tz("America/Mexico_City").format("YYYY-MM-DD HH:mm:ss"),
+        ...resultado
     });
 });
+
 
 app.get('/',(req,res)=>{
     return res.status(200).json({
@@ -230,11 +245,15 @@ app.get('/sessions', (req, res) => {
         
         const tiempoSesionActivo = now.diff(sessionStart, 'seconds');
         const tiempoInactividad = now.diff(lastAccessed, 'seconds');
+
+        const tiempoExpiracion = tiemposeson / 1000; 
+        const tiempoRestante = Math.max(0, tiempoExpiracion - tiempoInactividad);
       
         return {
             ...session,
             Duracion_sesion: `${tiempoSesionActivo} segundos`,
             tiempoInactividad: `${tiempoInactividad} segundos`,
+            tiempoRestante: `${formatTime(tiempoRestante)} segundos`,
         };
     });
     
