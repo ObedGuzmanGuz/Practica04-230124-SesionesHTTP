@@ -166,7 +166,7 @@ app.post("/update", (req, res) => {
     console.log("SessionID proporcionado:", sessionID);
 });
 
-const tiemposeson = 2 * 60 * 1000; //
+const tiemposeson = 5 * 60 * 1000; //
 const calcularTiempoSesion = (sessionID) => {
     if (!sessions[sessionID]) {
         return { error: "Sesión no encontrada." };
@@ -238,31 +238,48 @@ app.get('/sessions', (req, res) => {
         });
     }
 
-
     const now = moment();
+    const sessionIDs = Object.keys(sessions);
+
+    sessionIDs.forEach(sessionID => {
+        const session = sessions[sessionID];
+        const lastAccessed = moment(session.lastAccessed, 'YYYY-MM-DD HH:mm:ss');
+        const tiempoInactividad = now.diff(lastAccessed, 'seconds');
+
+        if (tiempoInactividad >= tiemposeson / 1000) {
+            delete sessions[sessionID]; // Elimina la sesión inactiva
+        }
+    });
+
+    if (Object.keys(sessions).length === 0) {
+        return res.status(404).json({
+            message: 'No hay sesiones activas ',
+        });
+    }
+
     const sessionsWithTimeData = Object.values(sessions).map(session => {
         const sessionStart = moment(session.createAt, 'YYYY-MM-DD HH:mm:ss');
         const lastAccessed = moment(session.lastAccessed, 'YYYY-MM-DD HH:mm:ss');
         
         const tiempoSesionActivo = now.diff(sessionStart, 'seconds');
         const tiempoInactividad = now.diff(lastAccessed, 'seconds');
-
         const tiempoExpiracion = tiemposeson / 1000; 
         const tiempoRestante = Math.max(0, tiempoExpiracion - tiempoInactividad);
       
         return {
             ...session,
             Duracion_sesion: `${tiempoSesionActivo} segundos`,
-            tiempoInactividad: `${tiempoInactividad} segundos`,
-            tiempoRestante: `${formatTime(tiempoRestante)} segundos`,
+            tiempoInactividad: `${formatTime(tiempoInactividad)} `,
+            tiempoRestante: `${formatTime(tiempoRestante)} `,
         };
     });
-    
+
     res.status(200).json({
         message: 'Sesiones activas',
         sessions: sessionsWithTimeData, 
     });
 });
+
 
 
 
